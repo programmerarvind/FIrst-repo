@@ -26,10 +26,10 @@ class BrainStreakTracker {
         const centerY = this.height / 2;
 
         const cells = [];
-        const cols = 11;
-        const rows = 9;
-        const cellWidth = 50;
-        const cellHeight = 46;
+        const cols = 9;  // Reduced since brain is narrower
+        const rows = 11; // Increased since brain is taller
+        const cellWidth = 48;
+        const cellHeight = 48;
 
         let cellId = 0;
 
@@ -37,9 +37,9 @@ class BrainStreakTracker {
             for (let col = 0; col < cols; col++) {
                 if (cellId >= this.totalCells) break;
 
-                // Calculate center of this grid cell
-                const x = 150 + col * cellWidth;
-                const y = 130 + row * cellHeight;
+                // Calculate center of this grid cell - adjusted for new brain dimensions
+                const x = 185 + col * cellWidth;
+                const y = 70 + row * cellHeight;
 
                 // Check if cell center is inside brain
                 if (!this.isInsideBrainShape(x, y)) continue;
@@ -137,56 +137,70 @@ class BrainStreakTracker {
         return clipped;
     }
 
-    // Check if point is inside brain shape
+    // Check if point is inside brain shape (taller, narrower proportions)
     isInsideBrainShape(x, y) {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        const nx = (x - centerX) / 270;
-        const ny = (y - centerY) / 200;
+        // New proportions: narrower (240) and taller (300)
+        const nx = (x - centerX) / 240;
+        const ny = (y - centerY) / 300;
 
         const angle = Math.atan2(ny, nx);
-        const brainFactor = 0.92 + Math.sin(angle * 3) * 0.10;
+
+        // More variation for organic brain-like shape
+        const brainFactor = 0.90 + Math.sin(angle * 3) * 0.12 + Math.sin(angle * 5) * 0.05;
         const distance = Math.sqrt(nx * nx + ny * ny);
 
         return distance < brainFactor;
     }
 
-    // Create brain outline path
+    // Create brain outline path - Taller (1.25:1 ratio) with organic bumps
     createBrainOutlinePath() {
         const cx = this.width / 2;
         const cy = this.height / 2;
-        const w = 270;
-        const h = 200;
+        const w = 240; // Half width (narrower)
+        const h = 300; // Half height (much taller for 1.25:1 ratio)
 
+        // Create organic brain shape with bumps and curves
         return `
             M ${cx},${cy - h}
-            C ${cx + 15},${cy - h - 5} ${cx + 40},${cy - h + 10} ${cx + 60},${cy - h + 25}
-            C ${cx + 75},${cy - h + 35} ${cx + 95},${cy - h + 50} ${cx + 115},${cy - h + 70}
-            C ${cx + 135},${cy - h + 90} ${cx + 160},${cy - h + 115} ${cx + 180},${cy - h + 145}
-            C ${cx + 195},${cy - h + 165} ${cx + 215},${cy - h + 190} ${cx + 235},${cy - h + 215}
-            C ${cx + 250},${cy - h + 235} ${cx + 265},${cy - h + 260} ${cx + w},${cy}
-            C ${cx + 265},${cy + 30} ${cx + 255},${cy + 60} ${cx + 240},${cy + 85}
-            C ${cx + 225},${cy + 110} ${cx + 205},${cy + 135} ${cx + 180},${cy + 155}
-            C ${cx + 155},${cy + 175} ${cx + 125},${cy + 185} ${cx + 95},${cy + 192}
-            C ${cx + 70},${cy + 197} ${cx + 40},${cy + h - 5} ${cx + 15},${cy + h}
-            C ${cx + 5},${cy + h + 2} ${cx - 5},${cy + h + 2} ${cx - 15},${cy + h}
-            C ${cx - 40},${cy + h - 5} ${cx - 70},${cy + 197} ${cx - 95},${cy + 192}
-            C ${cx - 125},${cy + 185} ${cx - 155},${cy + 175} ${cx - 180},${cy + 155}
-            C ${cx - 205},${cy + 135} ${cx - 225},${cy + 110} ${cx - 240},${cy + 85}
-            C ${cx - 255},${cy + 60} ${cx - 265},${cy + 30} ${cx - w},${cy}
-            C ${cx - 265},${cy - h + 260} ${cx - 250},${cy - h + 235} ${cx - 235},${cy - h + 215}
-            C ${cx - 215},${cy - h + 190} ${cx - 195},${cy - h + 165} ${cx - 180},${cy - h + 145}
-            C ${cx - 160},${cy - h + 115} ${cx - 135},${cy - h + 90} ${cx - 115},${cy - h + 70}
-            C ${cx - 95},${cy - h + 50} ${cx - 75},${cy - h + 35} ${cx - 60},${cy - h + 25}
-            C ${cx - 40},${cy - h + 10} ${cx - 15},${cy - h - 5} ${cx},${cy - h}
+
+            C ${cx + 10},${cy - h - 8} ${cx + 35},${cy - h + 5} ${cx + 55},${cy - h + 25}
+            C ${cx + 70},${cy - h + 40} ${cx + 90},${cy - h + 65} ${cx + 105},${cy - h + 90}
+            C ${cx + 115},${cy - h + 105} ${cx + 130},${cy - h + 125} ${cx + 145},${cy - h + 150}
+
+            C ${cx + 160},${cy - h + 175} ${cx + 180},${cy - h + 205} ${cx + 195},${cy - h + 235}
+            C ${cx + 210},${cy - h + 265} ${cx + 225},${cy - h + 295} ${cx + w},${cy - 20}
+
+            C ${cx + 235},${cy + 20} ${cx + 230},${cy + 60} ${cx + 220},${cy + 100}
+            C ${cx + 210},${cy + 135} ${cx + 195},${cy + 170} ${cx + 175},${cy + 200}
+
+            C ${cx + 155},${cy + 230} ${cx + 130},${cy + 255} ${cx + 100},${cy + 275}
+            C ${cx + 70},${cy + 290} ${cx + 35},${cy + 297} ${cx + 10},${cy + h - 5}
+
+            C ${cx + 5},${cy + h} ${cx - 5},${cy + h} ${cx - 10},${cy + h - 5}
+
+            C ${cx - 35},${cy + 297} ${cx - 70},${cy + 290} ${cx - 100},${cy + 275}
+            C ${cx - 130},${cy + 255} ${cx - 155},${cy + 230} ${cx - 175},${cy + 200}
+
+            C ${cx - 195},${cy + 170} ${cx - 210},${cy + 135} ${cx - 220},${cy + 100}
+            C ${cx - 230},${cy + 60} ${cx - 235},${cy + 20} ${cx - w},${cy - 20}
+
+            C ${cx - 225},${cy - h + 295} ${cx - 210},${cy - h + 265} ${cx - 195},${cy - h + 235}
+            C ${cx - 180},${cy - h + 205} ${cx - 160},${cy - h + 175} ${cx - 145},${cy - h + 150}
+
+            C ${cx - 130},${cy - h + 125} ${cx - 115},${cy - h + 105} ${cx - 105},${cy - h + 90}
+            C ${cx - 90},${cy - h + 65} ${cx - 70},${cy - h + 40} ${cx - 55},${cy - h + 25}
+            C ${cx - 35},${cy - h + 5} ${cx - 10},${cy - h - 8} ${cx},${cy - h}
             Z
         `;
     }
 
     // Get color for completed cells
     getCellColor(x, y, hemisphere) {
-        const normalizedY = (y - 100) / 400;
+        // Adjust for new taller brain dimensions
+        const normalizedY = (y - 50) / 500;
 
         const colors = {
             left: [
@@ -280,12 +294,12 @@ class BrainStreakTracker {
 
         console.log(`✓ Successfully rendered ${renderedCount} cells`);
 
-        // 3. Midline divider
+        // 3. Midline divider (adjusted for taller brain)
         const midline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         midline.setAttribute('x1', this.width / 2);
-        midline.setAttribute('y1', 110);
+        midline.setAttribute('y1', 60);  // Higher up for taller brain
         midline.setAttribute('x2', this.width / 2);
-        midline.setAttribute('y2', 490);
+        midline.setAttribute('y2', 540); // Lower down for taller brain
         midline.setAttribute('stroke', '#1a1a1a');
         midline.setAttribute('stroke-width', '3');
         this.svg.appendChild(midline);
