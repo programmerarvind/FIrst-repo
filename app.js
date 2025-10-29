@@ -1,8 +1,8 @@
-// Brain Streak Tracker - With Proper Voronoi Tessellation
+// Brain Streak Tracker - Simplified Working Version
 class BrainStreakTracker {
     constructor() {
         this.svg = document.getElementById('brain-svg');
-        this.totalCells = 95;
+        this.totalCells = 85;
         this.cells = [];
         this.completedCells = new Set();
         this.width = 800;
@@ -20,81 +20,64 @@ class BrainStreakTracker {
         this.setupEventListeners();
     }
 
-    // Generate Voronoi tessellation cells
+    // Generate cells using grid-based Voronoi-like pattern
     generateBrainCells() {
-        // Generate random points within brain shape
-        const points = this.generatePointsInBrain();
+        const centerX = this.width / 2;
+        const centerY = this.height / 2;
+
+        // Generate seed points in a grid pattern within brain
+        const points = [];
+        const cols = 10;
+        const rows = 9;
+
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const x = 150 + col * 50 + (Math.random() - 0.5) * 25;
+                const y = 130 + row * 45 + (Math.random() - 0.5) * 20;
+
+                if (this.isInsideBrainShape(x, y)) {
+                    points.push({ x, y, id: points.length });
+                }
+            }
+        }
+
+        // Limit to target number
+        const limitedPoints = points.slice(0, this.totalCells);
 
         // Create Voronoi diagram
-        const voronoi = new SimpleVoronoi(
-            points,
-            [100, 100, 700, 500]
-        );
-
+        const voronoi = new SimpleVoronoi(limitedPoints, [100, 100, 700, 500]);
         const voronoiCells = voronoi.generateCells();
 
-        // Convert to our cell format
-        this.cells = voronoiCells.map((cell, i) => {
-            const site = cell.site;
-            const vertices = this.clipCellToBrain(cell.vertices);
+        // Convert to cell objects
+        this.cells = voronoiCells.map((vcell, i) => {
+            if (i >= limitedPoints.length) return null;
+
+            const site = limitedPoints[i];
+            let vertices = vcell.vertices;
+
+            // Clip to brain shape
+            vertices = this.clipPolygonToBrain(vertices);
 
             if (vertices.length < 3) return null;
 
-            const centerX = this.width / 2;
             const hemisphere = site.x < centerX ? 'left' : 'right';
 
             return {
-                id: i,
+                id: site.id,
                 x: site.x,
                 y: site.y,
                 vertices: vertices,
                 hemisphere: hemisphere,
-                completed: this.completedCells.has(i),
+                completed: this.completedCells.has(site.id),
                 color: this.getCellColor(site.x, site.y, hemisphere)
             };
         }).filter(cell => cell !== null);
 
-        // Limit to totalCells
-        this.cells = this.cells.slice(0, this.totalCells);
+        console.log(`Generated ${this.cells.length} cells`);
     }
 
-    // Generate random points within brain shape
-    generatePointsInBrain() {
-        const points = [];
-        const maxAttempts = this.totalCells * 10;
-        let attempts = 0;
-
-        while (points.length < this.totalCells && attempts < maxAttempts) {
-            const x = 100 + Math.random() * 600;
-            const y = 100 + Math.random() * 400;
-
-            if (this.isInsideBrainShape(x, y)) {
-                // Check minimum distance from existing points
-                let tooClose = false;
-                for (const point of points) {
-                    const dist = Math.sqrt(
-                        Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2)
-                    );
-                    if (dist < 25) {
-                        tooClose = true;
-                        break;
-                    }
-                }
-
-                if (!tooClose) {
-                    points.push({ x, y });
-                }
-            }
-
-            attempts++;
-        }
-
-        return points;
-    }
-
-    // Clip cell vertices to brain boundary
-    clipCellToBrain(vertices) {
-        // Simple approach: filter vertices outside brain and add edge intersections
+    // More robust clipping to brain boundary
+    clipPolygonToBrain(vertices) {
         const clipped = [];
 
         for (let i = 0; i < vertices.length; i++) {
@@ -108,11 +91,11 @@ class BrainStreakTracker {
                 clipped.push(v1);
             }
 
-            // If edge crosses boundary, approximate intersection
+            // Edge crosses boundary
             if (inside1 !== inside2) {
-                // Binary search for intersection point
+                // Binary search for intersection
                 let t0 = 0, t1 = 1;
-                for (let j = 0; j < 10; j++) {
+                for (let j = 0; j < 15; j++) {
                     const t = (t0 + t1) / 2;
                     const x = v1.x + t * (v2.x - v1.x);
                     const y = v1.y + t * (v2.y - v1.y);
@@ -135,7 +118,7 @@ class BrainStreakTracker {
         return clipped;
     }
 
-    // Check if point is inside brain shape
+    // Check if point is inside brain
     isInsideBrainShape(x, y) {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
@@ -144,33 +127,20 @@ class BrainStreakTracker {
         const ny = (y - centerY) / 200;
 
         const angle = Math.atan2(ny, nx);
-        const brainFactor = 0.95 + Math.sin(angle * 3) * 0.12;
+        const brainFactor = 0.92 + Math.sin(angle * 3) * 0.10;
         const distance = Math.sqrt(nx * nx + ny * ny);
 
         return distance < brainFactor;
     }
 
-    // Convert vertices to SVG path
-    verticesToPath(vertices) {
-        if (vertices.length === 0) return '';
-
-        let path = `M ${vertices[0].x} ${vertices[0].y}`;
-        for (let i = 1; i < vertices.length; i++) {
-            path += ` L ${vertices[i].x} ${vertices[i].y}`;
-        }
-        path += ' Z';
-
-        return path;
-    }
-
-    // Create organic brain outline path
+    // Create brain outline path
     createBrainOutlinePath() {
         const cx = this.width / 2;
         const cy = this.height / 2;
         const w = 270;
         const h = 200;
 
-        const path = `
+        return `
             M ${cx},${cy - h}
             C ${cx + 15},${cy - h - 5} ${cx + 40},${cy - h + 10} ${cx + 60},${cy - h + 25}
             C ${cx + 75},${cy - h + 35} ${cx + 95},${cy - h + 50} ${cx + 115},${cy - h + 70}
@@ -193,8 +163,6 @@ class BrainStreakTracker {
             C ${cx - 40},${cy - h + 10} ${cx - 15},${cy - h - 5} ${cx},${cy - h}
             Z
         `;
-
-        return path;
     }
 
     // Get color for completed cells
@@ -227,71 +195,97 @@ class BrainStreakTracker {
         return `rgb(${r}, ${g}, ${b})`;
     }
 
-    // Render the brain SVG
-    renderBrain() {
-        this.svg.innerHTML = '';
+    // Convert vertices to path
+    verticesToPath(vertices) {
+        if (!vertices || vertices.length === 0) return '';
 
-        // Add brain background
-        const brainBackground = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        const brainPath = this.createBrainOutlinePath();
-        brainBackground.setAttribute('d', brainPath);
-        brainBackground.setAttribute('fill', '#fafafa');
-        this.svg.appendChild(brainBackground);
+        let path = `M ${vertices[0].x} ${vertices[0].y}`;
+        for (let i = 1; i < vertices.length; i++) {
+            path += ` L ${vertices[i].x} ${vertices[i].y}`;
+        }
+        path += ' Z';
 
-        // Render each Voronoi cell
-        this.cells.forEach(cell => {
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            const pathData = this.verticesToPath(cell.vertices);
-
-            path.setAttribute('d', pathData);
-            path.setAttribute('class', `brain-cell ${cell.completed ? 'completed' : 'uncompleted'}`);
-
-            // IMPORTANT: Uncompleted cells are white/light gray, completed cells get color
-            path.setAttribute('fill', cell.completed ? cell.color : '#ffffff');
-            path.setAttribute('stroke', '#2d3748');
-            path.setAttribute('stroke-width', '2.5');
-            path.setAttribute('data-cell-id', cell.id);
-
-            // Add event listeners
-            path.addEventListener('click', () => this.toggleCell(cell.id));
-            path.addEventListener('mouseenter', (e) => this.showTooltip(e, cell));
-            path.addEventListener('mouseleave', () => this.hideTooltip());
-            path.addEventListener('mousemove', (e) => this.moveTooltip(e));
-
-            this.svg.appendChild(path);
-        });
-
-        // Add midline separator
-        const midline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        midline.setAttribute('x1', this.width / 2);
-        midline.setAttribute('y1', 105);
-        midline.setAttribute('x2', this.width / 2);
-        midline.setAttribute('y2', 495);
-        midline.setAttribute('stroke', '#2d3748');
-        midline.setAttribute('stroke-width', '4');
-        this.svg.appendChild(midline);
-
-        // Add brain outline
-        const brainOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        brainOutline.setAttribute('d', brainPath);
-        brainOutline.setAttribute('fill', 'none');
-        brainOutline.setAttribute('stroke', '#2d3748');
-        brainOutline.setAttribute('stroke-width', '4');
-        brainOutline.setAttribute('stroke-linejoin', 'round');
-        this.svg.appendChild(brainOutline);
+        return path;
     }
 
-    // Toggle cell completion
+    // Render the brain
+    renderBrain() {
+        this.svg.innerHTML = '';
+        const brainPath = this.createBrainOutlinePath();
+
+        // 1. Brain background (light color so we can see cells)
+        const background = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        background.setAttribute('d', brainPath);
+        background.setAttribute('fill', '#f0f0f0');
+        this.svg.appendChild(background);
+
+        console.log(`Rendering ${this.cells.length} cells`);
+
+        // 2. Render each cell (THE PUZZLE PIECES)
+        this.cells.forEach(cell => {
+            const cellPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            const pathData = this.verticesToPath(cell.vertices);
+
+            if (!pathData) {
+                console.warn(`Cell ${cell.id} has no path data`);
+                return;
+            }
+
+            cellPath.setAttribute('d', pathData);
+            cellPath.setAttribute('class', `brain-cell ${cell.completed ? 'completed' : 'uncompleted'}`);
+
+            // Empty cells: light gray, Completed cells: vibrant color
+            const fillColor = cell.completed ? cell.color : '#e8e8e8';
+            cellPath.setAttribute('fill', fillColor);
+            cellPath.setAttribute('stroke', '#2d3748');
+            cellPath.setAttribute('stroke-width', '2.5');
+            cellPath.setAttribute('stroke-linejoin', 'round');
+            cellPath.setAttribute('data-cell-id', cell.id);
+
+            // Click handler
+            cellPath.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.toggleCell(cell.id);
+            });
+
+            cellPath.addEventListener('mouseenter', (e) => this.showTooltip(e, cell));
+            cellPath.addEventListener('mouseleave', () => this.hideTooltip());
+            cellPath.addEventListener('mousemove', (e) => this.moveTooltip(e));
+
+            this.svg.appendChild(cellPath);
+        });
+
+        // 3. Midline separator
+        const midline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        midline.setAttribute('x1', this.width / 2);
+        midline.setAttribute('y1', 110);
+        midline.setAttribute('x2', this.width / 2);
+        midline.setAttribute('y2', 490);
+        midline.setAttribute('stroke', '#2d3748');
+        midline.setAttribute('stroke-width', '3');
+        this.svg.appendChild(midline);
+
+        // 4. Brain outline (on top for clear boundary)
+        const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        outline.setAttribute('d', brainPath);
+        outline.setAttribute('fill', 'none');
+        outline.setAttribute('stroke', '#2d3748');
+        outline.setAttribute('stroke-width', '4');
+        outline.setAttribute('stroke-linejoin', 'round');
+        this.svg.appendChild(outline);
+    }
+
+    // Toggle cell
     toggleCell(cellId) {
         const cell = this.cells.find(c => c.id === cellId);
         if (!cell) return;
 
+        cell.completed = !cell.completed;
+
         if (cell.completed) {
-            cell.completed = false;
-            this.completedCells.delete(cellId);
-        } else {
-            cell.completed = true;
             this.completedCells.add(cellId);
+        } else {
+            this.completedCells.delete(cellId);
         }
 
         this.saveProgress();
@@ -299,35 +293,36 @@ class BrainStreakTracker {
         this.updateStats();
     }
 
-    // Update individual cell visual
+    // Update cell visual
     updateCellVisual(cellId) {
         const cell = this.cells.find(c => c.id === cellId);
         if (!cell) return;
 
         const pathElement = this.svg.querySelector(`[data-cell-id="${cellId}"]`);
+        if (!pathElement) return;
+
+        const fillColor = cell.completed ? cell.color : '#e8e8e8';
+        pathElement.setAttribute('fill', fillColor);
 
         if (cell.completed) {
-            pathElement.classList.remove('uncompleted');
             pathElement.classList.add('completed');
-            pathElement.setAttribute('fill', cell.color);
+            pathElement.classList.remove('uncompleted');
         } else {
-            pathElement.classList.remove('completed');
             pathElement.classList.add('uncompleted');
-            pathElement.setAttribute('fill', '#ffffff');
+            pathElement.classList.remove('completed');
         }
     }
 
-    // Calculate current streak
+    // Calculate streak
     calculateStreak() {
-        const sortedCompleted = Array.from(this.completedCells).sort((a, b) => a - b);
+        const sorted = Array.from(this.completedCells).sort((a, b) => a - b);
+        if (sorted.length === 0) return 0;
 
-        if (sortedCompleted.length === 0) return 0;
-
-        let currentStreak = 1;
         let maxStreak = 1;
+        let currentStreak = 1;
 
-        for (let i = 1; i < sortedCompleted.length; i++) {
-            if (sortedCompleted[i] === sortedCompleted[i - 1] + 1) {
+        for (let i = 1; i < sorted.length; i++) {
+            if (sorted[i] === sorted[i - 1] + 1) {
                 currentStreak++;
                 maxStreak = Math.max(maxStreak, currentStreak);
             } else {
@@ -338,18 +333,18 @@ class BrainStreakTracker {
         return maxStreak;
     }
 
-    // Update statistics display
+    // Update stats
     updateStats() {
         const streak = this.calculateStreak();
-        const totalCompleted = this.completedCells.size;
-        const percentage = Math.round((totalCompleted / this.cells.length) * 100);
+        const completed = this.completedCells.size;
+        const percentage = Math.round((completed / this.cells.length) * 100);
 
         document.getElementById('current-streak').textContent = streak;
-        document.getElementById('total-completed').textContent = totalCompleted;
+        document.getElementById('total-completed').textContent = completed;
         document.getElementById('completion-percentage').textContent = percentage + '%';
     }
 
-    // Show tooltip
+    // Tooltip methods
     showTooltip(event, cell) {
         const dayNum = cell.id + 1;
         const status = cell.completed ? '✅ Completed' : '⬜ Not completed';
@@ -363,18 +358,16 @@ class BrainStreakTracker {
         this.moveTooltip(event);
     }
 
-    // Move tooltip with cursor
     moveTooltip(event) {
         this.tooltip.style.left = (event.pageX + 15) + 'px';
         this.tooltip.style.top = (event.pageY + 15) + 'px';
     }
 
-    // Hide tooltip
     hideTooltip() {
         this.tooltip.classList.add('hidden');
     }
 
-    // Save progress to localStorage
+    // Storage
     saveProgress() {
         const data = {
             completedCells: Array.from(this.completedCells),
@@ -383,16 +376,19 @@ class BrainStreakTracker {
         localStorage.setItem('brainStreakTracker', JSON.stringify(data));
     }
 
-    // Load progress from localStorage
     loadProgress() {
         const saved = localStorage.getItem('brainStreakTracker');
         if (saved) {
-            const data = JSON.parse(saved);
-            this.completedCells = new Set(data.completedCells);
+            try {
+                const data = JSON.parse(saved);
+                this.completedCells = new Set(data.completedCells);
+            } catch (e) {
+                console.error('Failed to load progress', e);
+            }
         }
     }
 
-    // Reset all progress
+    // Reset
     resetProgress() {
         if (confirm('Are you sure you want to reset all progress? This cannot be undone.')) {
             this.completedCells.clear();
@@ -403,7 +399,7 @@ class BrainStreakTracker {
         }
     }
 
-    // Setup event listeners
+    // Event listeners
     setupEventListeners() {
         document.getElementById('reset-btn').addEventListener('click', () => {
             this.resetProgress();
@@ -429,7 +425,7 @@ class BrainStreakTracker {
     }
 }
 
-// Initialize the app when DOM is ready
+// Initialize
 document.addEventListener('DOMContentLoaded', () => {
     new BrainStreakTracker();
 });
