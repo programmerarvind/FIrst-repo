@@ -1,4 +1,4 @@
-// Brain Streak Tracker - Main Application
+// Brain Streak Tracker - Main Application (No external dependencies)
 class BrainStreakTracker {
     constructor() {
         this.svg = document.getElementById('brain-svg');
@@ -20,40 +20,103 @@ class BrainStreakTracker {
         this.setupEventListeners();
     }
 
-    // Generate points for Voronoi diagram within brain shape
-    generateBrainPoints() {
-        const points = [];
+    // Generate irregular mosaic cells without external libraries
+    generateBrainCells() {
+        const cells = [];
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        // Generate points within brain-like boundaries
-        for (let i = 0; i < this.totalCells; i++) {
-            let x, y;
-            let isValid = false;
+        // Define brain shape boundaries
+        const brainWidth = 550;
+        const brainHeight = 400;
+        const brainLeft = centerX - brainWidth / 2;
+        const brainTop = centerY - brainHeight / 2;
 
-            // Keep trying until we get a point inside the brain shape
-            while (!isValid) {
-                // Generate random point
-                const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * 200 + 50;
+        // Create irregular grid of cells
+        const cols = 12;
+        const rows = 8;
+        const baseWidth = brainWidth / cols;
+        const baseHeight = brainHeight / rows;
 
-                x = centerX + Math.cos(angle) * radius * 1.2;
-                y = centerY + Math.sin(angle) * radius * 0.8;
+        let cellId = 0;
 
-                // Add some brain-like irregularity
-                x += (Math.random() - 0.5) * 40;
-                y += (Math.random() - 0.5) * 40;
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                if (cellId >= this.totalCells) break;
 
-                // Check if point is within brain bounds
+                // Calculate base position with randomization
+                const randomX = (Math.random() - 0.5) * baseWidth * 0.4;
+                const randomY = (Math.random() - 0.5) * baseHeight * 0.4;
+
+                const x = brainLeft + col * baseWidth + baseWidth / 2 + randomX;
+                const y = brainTop + row * baseHeight + baseHeight / 2 + randomY;
+
+                // Check if within brain shape
                 if (this.isInsideBrainShape(x, y)) {
-                    isValid = true;
+                    // Create irregular polygon points
+                    const points = this.createIrregularPolygon(
+                        x, y,
+                        baseWidth * 0.9,
+                        baseHeight * 0.9
+                    );
+
+                    const hemisphere = x < centerX ? 'left' : 'right';
+
+                    cells.push({
+                        id: cellId,
+                        x: x,
+                        y: y,
+                        points: points,
+                        hemisphere: hemisphere,
+                        completed: this.completedCells.has(cellId),
+                        color: this.getCellColor(x, y, hemisphere)
+                    });
+
+                    cellId++;
                 }
             }
+        }
 
-            points.push([x, y]);
+        this.cells = cells;
+    }
+
+    // Create an irregular polygon around a center point
+    createIrregularPolygon(cx, cy, width, height) {
+        const points = [];
+        const sides = 5 + Math.floor(Math.random() * 2); // 5 or 6 sides
+
+        for (let i = 0; i < sides; i++) {
+            const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+
+            // Randomize radius for irregularity
+            const radiusX = (width / 2) * (0.7 + Math.random() * 0.5);
+            const radiusY = (height / 2) * (0.7 + Math.random() * 0.5);
+
+            // Add some angular randomness
+            const angleOffset = (Math.random() - 0.5) * 0.3;
+            const finalAngle = angle + angleOffset;
+
+            const x = cx + Math.cos(finalAngle) * radiusX;
+            const y = cy + Math.sin(finalAngle) * radiusY;
+
+            points.push({ x, y });
         }
 
         return points;
+    }
+
+    // Convert points array to SVG path string
+    pointsToPath(points) {
+        if (points.length === 0) return '';
+
+        let path = `M ${points[0].x} ${points[0].y}`;
+
+        for (let i = 1; i < points.length; i++) {
+            path += ` L ${points[i].x} ${points[i].y}`;
+        }
+
+        path += ' Z';
+        return path;
     }
 
     // Define brain-like shape boundary
@@ -62,47 +125,21 @@ class BrainStreakTracker {
         const centerY = this.height / 2;
 
         // Normalized coordinates
-        const nx = (x - centerX) / (this.width / 2);
-        const ny = (y - centerY) / (this.height / 2);
+        const nx = (x - centerX) / 280;
+        const ny = (y - centerY) / 210;
 
         // Brain-like ellipse with some irregularity
-        const brainFactor = 1.2 + Math.sin(Math.atan2(ny, nx) * 3) * 0.15;
-        const distance = Math.sqrt(nx * nx * 0.7 + ny * ny * 1.2);
+        const angle = Math.atan2(ny, nx);
+        const brainFactor = 1.0 + Math.sin(angle * 3) * 0.12;
+        const distance = Math.sqrt(nx * nx + ny * ny);
 
-        return distance < brainFactor && x > 100 && x < 700 && y > 80 && y < 520;
-    }
-
-    // Generate Voronoi cells
-    generateBrainCells() {
-        const points = this.generateBrainPoints();
-
-        // Create Voronoi diagram using d3-delaunay
-        const delaunay = d3.Delaunay.from(points);
-        const voronoi = delaunay.voronoi([0, 0, this.width, this.height]);
-
-        // Create cell objects
-        this.cells = points.map((point, i) => {
-            const [x, y] = point;
-            const cellPath = voronoi.renderCell(i);
-            const hemisphere = x < this.width / 2 ? 'left' : 'right';
-
-            return {
-                id: i,
-                x: x,
-                y: y,
-                path: cellPath,
-                hemisphere: hemisphere,
-                completed: this.completedCells.has(i),
-                color: this.getCellColor(x, y, hemisphere)
-            };
-        });
+        return distance < brainFactor;
     }
 
     // Get color based on position in brain
     getCellColor(x, y, hemisphere) {
-        // Create gradient from top to bottom and left to right
-        const normalizedX = x / this.width;
-        const normalizedY = y / this.height;
+        // Create gradient from top to bottom
+        const normalizedY = (y - 100) / 400;
 
         // Color palettes for different brain regions
         const colors = {
@@ -119,9 +156,9 @@ class BrainStreakTracker {
         };
 
         const palette = colors[hemisphere];
-        const colorIndex = normalizedY * 2;
-        const baseColorIndex = Math.min(Math.floor(colorIndex), palette.length - 2);
-        const nextColorIndex = baseColorIndex + 1;
+        const colorIndex = Math.max(0, Math.min(1.99, normalizedY * 2));
+        const baseColorIndex = Math.floor(colorIndex);
+        const nextColorIndex = Math.min(baseColorIndex + 1, palette.length - 1);
         const blend = colorIndex - baseColorIndex;
 
         const r = Math.round(palette[baseColorIndex].r * (1 - blend) + palette[nextColorIndex].r * blend);
@@ -138,9 +175,9 @@ class BrainStreakTracker {
         // Add midline separator
         const midline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         midline.setAttribute('x1', this.width / 2);
-        midline.setAttribute('y1', 80);
+        midline.setAttribute('y1', 100);
         midline.setAttribute('x2', this.width / 2);
-        midline.setAttribute('y2', 520);
+        midline.setAttribute('y2', 500);
         midline.setAttribute('stroke', '#2d3748');
         midline.setAttribute('stroke-width', '3');
         midline.setAttribute('stroke-dasharray', '5,5');
@@ -149,7 +186,9 @@ class BrainStreakTracker {
         // Render each cell
         this.cells.forEach(cell => {
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', cell.path);
+            const pathData = this.pointsToPath(cell.points);
+
+            path.setAttribute('d', pathData);
             path.setAttribute('class', `brain-cell ${cell.completed ? 'completed' : 'uncompleted'}`);
             path.setAttribute('fill', cell.completed ? cell.color : '#e2e8f0');
             path.setAttribute('data-cell-id', cell.id);
