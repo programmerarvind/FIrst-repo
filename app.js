@@ -197,11 +197,12 @@ class BrainStreakTracker {
         `;
     }
 
-    // Get color for completed cells
+    // Get color for completed cells with progression gradient
     getCellColor(x, y, hemisphere) {
-        // Adjust for new taller brain dimensions
+        // Calculate position in brain for base color
         const normalizedY = (y - 50) / 500;
 
+        // Base color palettes by hemisphere
         const colors = {
             left: [
                 { r: 138, g: 43, b: 226 },   // Purple
@@ -224,6 +225,37 @@ class BrainStreakTracker {
         const r = Math.round(palette[baseIdx].r * (1 - blend) + palette[nextIdx].r * blend);
         const g = Math.round(palette[baseIdx].g * (1 - blend) + palette[nextIdx].g * blend);
         const b = Math.round(palette[baseIdx].b * (1 - blend) + palette[nextIdx].b * blend);
+
+        return `rgb(${r}, ${g}, ${b})`;
+    }
+
+    // Get dynamic color based on completion order (streak progression)
+    getCellColorWithProgress(cellId) {
+        // Find position in completion order
+        const completedArray = Array.from(this.completedCells).sort((a, b) => a - b);
+        const position = completedArray.indexOf(cellId);
+
+        if (position === -1) return null; // Not completed
+
+        // Progression from cool (purple) to warm (orange/pink)
+        const progress = completedArray.length > 1 ? position / (completedArray.length - 1) : 0;
+
+        // Color gradient: Cool purple → Violet → Warm pink → Orange
+        const colors = [
+            { r: 138, g: 43, b: 226 },   // Purple (early)
+            { r: 199, g: 21, b: 133 },   // Violet red (middle)
+            { r: 255, g: 20, b: 147 },   // Deep pink (middle-late)
+            { r: 255, g: 105, b: 180 }   // Hot pink (late)
+        ];
+
+        const colorPos = progress * (colors.length - 1);
+        const baseIdx = Math.floor(colorPos);
+        const nextIdx = Math.min(baseIdx + 1, colors.length - 1);
+        const blend = colorPos - baseIdx;
+
+        const r = Math.round(colors[baseIdx].r * (1 - blend) + colors[nextIdx].r * blend);
+        const g = Math.round(colors[baseIdx].g * (1 - blend) + colors[nextIdx].g * blend);
+        const b = Math.round(colors[baseIdx].b * (1 - blend) + colors[nextIdx].b * blend);
 
         return `rgb(${r}, ${g}, ${b})`;
     }
@@ -268,8 +300,10 @@ class BrainStreakTracker {
             const cellElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             cellElement.setAttribute('d', pathData);
 
-            // Color: gray when empty, vibrant when completed
-            const fillColor = cell.completed ? cell.color : '#d4d4d4';
+            // Color: gray when empty, progressive gradient when completed
+            const fillColor = cell.completed
+                ? this.getCellColorWithProgress(cell.id)
+                : '#d4d4d4';
             cellElement.setAttribute('fill', fillColor);
             cellElement.setAttribute('stroke', '#1a1a1a');
             cellElement.setAttribute('stroke-width', '2');
@@ -277,6 +311,7 @@ class BrainStreakTracker {
             cellElement.setAttribute('data-cell-id', cell.id);
             cellElement.setAttribute('class', `brain-cell ${cell.completed ? 'completed' : 'uncompleted'}`);
             cellElement.style.cursor = 'pointer';
+            cellElement.style.transition = 'all 0.3s ease';
 
             // Click to toggle
             cellElement.addEventListener('click', (e) => {
@@ -304,12 +339,12 @@ class BrainStreakTracker {
         midline.setAttribute('stroke-width', '3');
         this.svg.appendChild(midline);
 
-        // 4. Brain outline (on top)
+        // 4. Brain outline (on top) - thicker for better definition
         const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         outline.setAttribute('d', brainPath);
         outline.setAttribute('fill', 'none');
         outline.setAttribute('stroke', '#1a1a1a');
-        outline.setAttribute('stroke-width', '4');
+        outline.setAttribute('stroke-width', '5.5');
         outline.setAttribute('stroke-linejoin', 'round');
         this.svg.appendChild(outline);
     }
@@ -332,7 +367,7 @@ class BrainStreakTracker {
         this.updateStats();
     }
 
-    // Update single cell visual
+    // Update single cell visual with animation
     updateCellVisual(cellId) {
         const cell = this.cells.find(c => c.id === cellId);
         if (!cell) return;
@@ -340,9 +375,37 @@ class BrainStreakTracker {
         const element = this.svg.querySelector(`[data-cell-id="${cellId}"]`);
         if (!element) return;
 
-        const fillColor = cell.completed ? cell.color : '#d4d4d4';
+        // Add click animation
+        element.style.transform = 'scale(1.15)';
+        setTimeout(() => {
+            element.style.transform = 'scale(1)';
+        }, 200);
+
+        // Update color with progression gradient
+        const fillColor = cell.completed
+            ? this.getCellColorWithProgress(cellId)
+            : '#d4d4d4';
         element.setAttribute('fill', fillColor);
         element.setAttribute('class', `brain-cell ${cell.completed ? 'completed' : 'uncompleted'}`);
+
+        // When completing a cell, update ALL completed cells to recalculate colors
+        // (since position in gradient changes)
+        if (cell.completed) {
+            setTimeout(() => this.updateAllCompletedColors(), 250);
+        }
+    }
+
+    // Update all completed cell colors (for gradient progression)
+    updateAllCompletedColors() {
+        this.cells.forEach(cell => {
+            if (cell.completed) {
+                const element = this.svg.querySelector(`[data-cell-id="${cell.id}"]`);
+                if (element) {
+                    const color = this.getCellColorWithProgress(cell.id);
+                    element.setAttribute('fill', color);
+                }
+            }
+        });
     }
 
     // Calculate streak

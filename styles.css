@@ -83,29 +83,37 @@ h1 {
 .brain-cell {
     cursor: pointer;
     transition: all 0.3s ease;
+    transform-origin: center;
 }
 
 .brain-cell.uncompleted {
-    /* White/light gray for empty cells */
+    /* Light gray for empty cells */
+}
+
+.brain-cell.uncompleted:hover {
+    fill: #c0c0c0 !important;
+    filter: brightness(1.1);
+    transform: scale(1.05);
 }
 
 .brain-cell.completed {
     animation: fillCell 0.5s ease-out;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
 }
 
-.brain-cell:hover {
-    filter: brightness(1.15);
-    opacity: 0.9;
+.brain-cell.completed:hover {
+    filter: brightness(1.2) drop-shadow(0 3px 6px rgba(0, 0, 0, 0.3));
+    transform: scale(1.08);
 }
 
 @keyframes fillCell {
     0% {
-        transform: scale(1);
-        opacity: 0.5;
+        transform: scale(0.95);
+        opacity: 0.6;
     }
     50% {
-        transform: scale(1.1);
-        opacity: 0.8;
+        transform: scale(1.15);
+        opacity: 0.9;
     }
     100% {
         transform: scale(1);
