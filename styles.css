@@ -81,14 +81,12 @@ h1 {
 }
 
 .brain-cell {
-    stroke: #2d3748;
-    stroke-width: 2;
     cursor: pointer;
     transition: all 0.3s ease;
 }
 
 .brain-cell.uncompleted {
-    fill: #e2e8f0;
+    /* White/light gray for empty cells */
 }
 
 .brain-cell.completed {
@@ -96,9 +94,8 @@ h1 {
 }
 
 .brain-cell:hover {
-    stroke-width: 3;
-    stroke: #667eea;
-    filter: brightness(1.1);
+    filter: brightness(1.15);
+    opacity: 0.9;
 }
 
 @keyframes fillCell {

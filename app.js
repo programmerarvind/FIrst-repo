@@ -1,4 +1,4 @@
-// Brain Streak Tracker - Main Application (No external dependencies)
+// Brain Streak Tracker - With Proper Voronoi Tessellation
 class BrainStreakTracker {
     constructor() {
         this.svg = document.getElementById('brain-svg');
@@ -20,164 +20,176 @@ class BrainStreakTracker {
         this.setupEventListeners();
     }
 
-    // Generate irregular mosaic cells without external libraries
+    // Generate Voronoi tessellation cells
     generateBrainCells() {
-        const cells = [];
-        const centerX = this.width / 2;
-        const centerY = this.height / 2;
+        // Generate random points within brain shape
+        const points = this.generatePointsInBrain();
 
-        // Define brain shape boundaries
-        const brainWidth = 550;
-        const brainHeight = 400;
-        const brainLeft = centerX - brainWidth / 2;
-        const brainTop = centerY - brainHeight / 2;
+        // Create Voronoi diagram
+        const voronoi = new SimpleVoronoi(
+            points,
+            [100, 100, 700, 500]
+        );
 
-        // Create irregular grid of cells
-        const cols = 12;
-        const rows = 8;
-        const baseWidth = brainWidth / cols;
-        const baseHeight = brainHeight / rows;
+        const voronoiCells = voronoi.generateCells();
 
-        let cellId = 0;
+        // Convert to our cell format
+        this.cells = voronoiCells.map((cell, i) => {
+            const site = cell.site;
+            const vertices = this.clipCellToBrain(cell.vertices);
 
-        for (let row = 0; row < rows; row++) {
-            for (let col = 0; col < cols; col++) {
-                if (cellId >= this.totalCells) break;
+            if (vertices.length < 3) return null;
 
-                // Calculate base position with randomization
-                const randomX = (Math.random() - 0.5) * baseWidth * 0.4;
-                const randomY = (Math.random() - 0.5) * baseHeight * 0.4;
+            const centerX = this.width / 2;
+            const hemisphere = site.x < centerX ? 'left' : 'right';
 
-                const x = brainLeft + col * baseWidth + baseWidth / 2 + randomX;
-                const y = brainTop + row * baseHeight + baseHeight / 2 + randomY;
+            return {
+                id: i,
+                x: site.x,
+                y: site.y,
+                vertices: vertices,
+                hemisphere: hemisphere,
+                completed: this.completedCells.has(i),
+                color: this.getCellColor(site.x, site.y, hemisphere)
+            };
+        }).filter(cell => cell !== null);
 
-                // Check if within brain shape
-                if (this.isInsideBrainShape(x, y)) {
-                    // Create irregular polygon points
-                    const points = this.createIrregularPolygon(
-                        x, y,
-                        baseWidth * 0.9,
-                        baseHeight * 0.9
-                    );
-
-                    const hemisphere = x < centerX ? 'left' : 'right';
-
-                    cells.push({
-                        id: cellId,
-                        x: x,
-                        y: y,
-                        points: points,
-                        hemisphere: hemisphere,
-                        completed: this.completedCells.has(cellId),
-                        color: this.getCellColor(x, y, hemisphere)
-                    });
-
-                    cellId++;
-                }
-            }
-        }
-
-        this.cells = cells;
+        // Limit to totalCells
+        this.cells = this.cells.slice(0, this.totalCells);
     }
 
-    // Create an irregular polygon around a center point
-    createIrregularPolygon(cx, cy, width, height) {
+    // Generate random points within brain shape
+    generatePointsInBrain() {
         const points = [];
-        const sides = 5 + Math.floor(Math.random() * 2); // 5 or 6 sides
+        const maxAttempts = this.totalCells * 10;
+        let attempts = 0;
 
-        for (let i = 0; i < sides; i++) {
-            const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+        while (points.length < this.totalCells && attempts < maxAttempts) {
+            const x = 100 + Math.random() * 600;
+            const y = 100 + Math.random() * 400;
 
-            // Randomize radius for irregularity
-            const radiusX = (width / 2) * (0.7 + Math.random() * 0.5);
-            const radiusY = (height / 2) * (0.7 + Math.random() * 0.5);
+            if (this.isInsideBrainShape(x, y)) {
+                // Check minimum distance from existing points
+                let tooClose = false;
+                for (const point of points) {
+                    const dist = Math.sqrt(
+                        Math.pow(x - point.x, 2) + Math.pow(y - point.y, 2)
+                    );
+                    if (dist < 25) {
+                        tooClose = true;
+                        break;
+                    }
+                }
 
-            // Add some angular randomness
-            const angleOffset = (Math.random() - 0.5) * 0.3;
-            const finalAngle = angle + angleOffset;
+                if (!tooClose) {
+                    points.push({ x, y });
+                }
+            }
 
-            const x = cx + Math.cos(finalAngle) * radiusX;
-            const y = cy + Math.sin(finalAngle) * radiusY;
-
-            points.push({ x, y });
+            attempts++;
         }
 
         return points;
     }
 
-    // Convert points array to SVG path string
-    pointsToPath(points) {
-        if (points.length === 0) return '';
+    // Clip cell vertices to brain boundary
+    clipCellToBrain(vertices) {
+        // Simple approach: filter vertices outside brain and add edge intersections
+        const clipped = [];
 
-        let path = `M ${points[0].x} ${points[0].y}`;
+        for (let i = 0; i < vertices.length; i++) {
+            const v1 = vertices[i];
+            const v2 = vertices[(i + 1) % vertices.length];
 
-        for (let i = 1; i < points.length; i++) {
-            path += ` L ${points[i].x} ${points[i].y}`;
+            const inside1 = this.isInsideBrainShape(v1.x, v1.y);
+            const inside2 = this.isInsideBrainShape(v2.x, v2.y);
+
+            if (inside1) {
+                clipped.push(v1);
+            }
+
+            // If edge crosses boundary, approximate intersection
+            if (inside1 !== inside2) {
+                // Binary search for intersection point
+                let t0 = 0, t1 = 1;
+                for (let j = 0; j < 10; j++) {
+                    const t = (t0 + t1) / 2;
+                    const x = v1.x + t * (v2.x - v1.x);
+                    const y = v1.y + t * (v2.y - v1.y);
+
+                    if (this.isInsideBrainShape(x, y) === inside1) {
+                        t0 = t;
+                    } else {
+                        t1 = t;
+                    }
+                }
+
+                const t = (t0 + t1) / 2;
+                clipped.push({
+                    x: v1.x + t * (v2.x - v1.x),
+                    y: v1.y + t * (v2.y - v1.y)
+                });
+            }
         }
 
-        path += ' Z';
-        return path;
+        return clipped;
     }
 
-    // Define brain-like shape boundary
+    // Check if point is inside brain shape
     isInsideBrainShape(x, y) {
         const centerX = this.width / 2;
         const centerY = this.height / 2;
 
-        // Normalized coordinates
-        const nx = (x - centerX) / 280;
-        const ny = (y - centerY) / 210;
+        const nx = (x - centerX) / 270;
+        const ny = (y - centerY) / 200;
 
-        // Brain-like ellipse with some irregularity
         const angle = Math.atan2(ny, nx);
-        const brainFactor = 1.0 + Math.sin(angle * 3) * 0.12;
+        const brainFactor = 0.95 + Math.sin(angle * 3) * 0.12;
         const distance = Math.sqrt(nx * nx + ny * ny);
 
         return distance < brainFactor;
     }
 
-    // Create organic brain outline path with bumpy, wavy edges
+    // Convert vertices to SVG path
+    verticesToPath(vertices) {
+        if (vertices.length === 0) return '';
+
+        let path = `M ${vertices[0].x} ${vertices[0].y}`;
+        for (let i = 1; i < vertices.length; i++) {
+            path += ` L ${vertices[i].x} ${vertices[i].y}`;
+        }
+        path += ' Z';
+
+        return path;
+    }
+
+    // Create organic brain outline path
     createBrainOutlinePath() {
         const cx = this.width / 2;
         const cy = this.height / 2;
+        const w = 270;
+        const h = 200;
 
-        // Brain dimensions
-        const w = 270; // half width
-        const h = 200; // half height
-
-        // Create path with bezier curves for organic appearance
-        // Starting from top center, going clockwise
         const path = `
             M ${cx},${cy - h}
-
             C ${cx + 15},${cy - h - 5} ${cx + 40},${cy - h + 10} ${cx + 60},${cy - h + 25}
             C ${cx + 75},${cy - h + 35} ${cx + 95},${cy - h + 50} ${cx + 115},${cy - h + 70}
-
             C ${cx + 135},${cy - h + 90} ${cx + 160},${cy - h + 115} ${cx + 180},${cy - h + 145}
             C ${cx + 195},${cy - h + 165} ${cx + 215},${cy - h + 190} ${cx + 235},${cy - h + 215}
-
             C ${cx + 250},${cy - h + 235} ${cx + 265},${cy - h + 260} ${cx + w},${cy}
-
             C ${cx + 265},${cy + 30} ${cx + 255},${cy + 60} ${cx + 240},${cy + 85}
             C ${cx + 225},${cy + 110} ${cx + 205},${cy + 135} ${cx + 180},${cy + 155}
-
             C ${cx + 155},${cy + 175} ${cx + 125},${cy + 185} ${cx + 95},${cy + 192}
             C ${cx + 70},${cy + 197} ${cx + 40},${cy + h - 5} ${cx + 15},${cy + h}
-
             C ${cx + 5},${cy + h + 2} ${cx - 5},${cy + h + 2} ${cx - 15},${cy + h}
-
             C ${cx - 40},${cy + h - 5} ${cx - 70},${cy + 197} ${cx - 95},${cy + 192}
             C ${cx - 125},${cy + 185} ${cx - 155},${cy + 175} ${cx - 180},${cy + 155}
-
             C ${cx - 205},${cy + 135} ${cx - 225},${cy + 110} ${cx - 240},${cy + 85}
             C ${cx - 255},${cy + 60} ${cx - 265},${cy + 30} ${cx - w},${cy}
-
             C ${cx - 265},${cy - h + 260} ${cx - 250},${cy - h + 235} ${cx - 235},${cy - h + 215}
             C ${cx - 215},${cy - h + 190} ${cx - 195},${cy - h + 165} ${cx - 180},${cy - h + 145}
-
             C ${cx - 160},${cy - h + 115} ${cx - 135},${cy - h + 90} ${cx - 115},${cy - h + 70}
             C ${cx - 95},${cy - h + 50} ${cx - 75},${cy - h + 35} ${cx - 60},${cy - h + 25}
-
             C ${cx - 40},${cy - h + 10} ${cx - 15},${cy - h - 5} ${cx},${cy - h}
             Z
         `;
@@ -185,22 +197,20 @@ class BrainStreakTracker {
         return path;
     }
 
-    // Get color based on position in brain
+    // Get color for completed cells
     getCellColor(x, y, hemisphere) {
-        // Create gradient from top to bottom
         const normalizedY = (y - 100) / 400;
 
-        // Color palettes for different brain regions
         const colors = {
             left: [
-                { r: 138, g: 43, b: 226 },   // Blue-violet (top)
-                { r: 75, g: 0, b: 130 },      // Indigo (middle)
-                { r: 72, g: 61, b: 139 }      // Dark slate blue (bottom)
+                { r: 138, g: 43, b: 226 },
+                { r: 75, g: 0, b: 130 },
+                { r: 72, g: 61, b: 139 }
             ],
             right: [
-                { r: 255, g: 20, b: 147 },    // Deep pink (top)
-                { r: 199, g: 21, b: 133 },    // Medium violet red (middle)
-                { r: 138, g: 43, b: 226 }     // Blue violet (bottom)
+                { r: 255, g: 20, b: 147 },
+                { r: 199, g: 21, b: 133 },
+                { r: 138, g: 43, b: 226 }
             ]
         };
 
@@ -221,41 +231,25 @@ class BrainStreakTracker {
     renderBrain() {
         this.svg.innerHTML = '';
 
-        // Add brain background fill
+        // Add brain background
         const brainBackground = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         const brainPath = this.createBrainOutlinePath();
         brainBackground.setAttribute('d', brainPath);
-        brainBackground.setAttribute('fill', '#f5f5f5');
-        brainBackground.setAttribute('opacity', '0.3');
+        brainBackground.setAttribute('fill', '#fafafa');
         this.svg.appendChild(brainBackground);
 
-        // Add brain outline with organic, wavy edges
-        const brainOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        brainOutline.setAttribute('d', brainPath);
-        brainOutline.setAttribute('fill', 'none');
-        brainOutline.setAttribute('stroke', '#2d3748');
-        brainOutline.setAttribute('stroke-width', '4');
-        brainOutline.setAttribute('stroke-linejoin', 'round');
-        this.svg.appendChild(brainOutline);
-
-        // Add midline separator (central dividing line)
-        const midline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        midline.setAttribute('x1', this.width / 2);
-        midline.setAttribute('y1', 105);
-        midline.setAttribute('x2', this.width / 2);
-        midline.setAttribute('y2', 495);
-        midline.setAttribute('stroke', '#2d3748');
-        midline.setAttribute('stroke-width', '4');
-        this.svg.appendChild(midline);
-
-        // Render each cell
+        // Render each Voronoi cell
         this.cells.forEach(cell => {
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            const pathData = this.pointsToPath(cell.points);
+            const pathData = this.verticesToPath(cell.vertices);
 
             path.setAttribute('d', pathData);
             path.setAttribute('class', `brain-cell ${cell.completed ? 'completed' : 'uncompleted'}`);
-            path.setAttribute('fill', cell.completed ? cell.color : '#e2e8f0');
+
+            // IMPORTANT: Uncompleted cells are white/light gray, completed cells get color
+            path.setAttribute('fill', cell.completed ? cell.color : '#ffffff');
+            path.setAttribute('stroke', '#2d3748');
+            path.setAttribute('stroke-width', '2.5');
             path.setAttribute('data-cell-id', cell.id);
 
             // Add event listeners
@@ -266,11 +260,31 @@ class BrainStreakTracker {
 
             this.svg.appendChild(path);
         });
+
+        // Add midline separator
+        const midline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        midline.setAttribute('x1', this.width / 2);
+        midline.setAttribute('y1', 105);
+        midline.setAttribute('x2', this.width / 2);
+        midline.setAttribute('y2', 495);
+        midline.setAttribute('stroke', '#2d3748');
+        midline.setAttribute('stroke-width', '4');
+        this.svg.appendChild(midline);
+
+        // Add brain outline
+        const brainOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        brainOutline.setAttribute('d', brainPath);
+        brainOutline.setAttribute('fill', 'none');
+        brainOutline.setAttribute('stroke', '#2d3748');
+        brainOutline.setAttribute('stroke-width', '4');
+        brainOutline.setAttribute('stroke-linejoin', 'round');
+        this.svg.appendChild(brainOutline);
     }
 
     // Toggle cell completion
     toggleCell(cellId) {
-        const cell = this.cells[cellId];
+        const cell = this.cells.find(c => c.id === cellId);
+        if (!cell) return;
 
         if (cell.completed) {
             cell.completed = false;
@@ -287,7 +301,9 @@ class BrainStreakTracker {
 
     // Update individual cell visual
     updateCellVisual(cellId) {
-        const cell = this.cells[cellId];
+        const cell = this.cells.find(c => c.id === cellId);
+        if (!cell) return;
+
         const pathElement = this.svg.querySelector(`[data-cell-id="${cellId}"]`);
 
         if (cell.completed) {
@@ -297,7 +313,7 @@ class BrainStreakTracker {
         } else {
             pathElement.classList.remove('completed');
             pathElement.classList.add('uncompleted');
-            pathElement.setAttribute('fill', '#e2e8f0');
+            pathElement.setAttribute('fill', '#ffffff');
         }
     }
 
@@ -326,7 +342,7 @@ class BrainStreakTracker {
     updateStats() {
         const streak = this.calculateStreak();
         const totalCompleted = this.completedCells.size;
-        const percentage = Math.round((totalCompleted / this.totalCells) * 100);
+        const percentage = Math.round((totalCompleted / this.cells.length) * 100);
 
         document.getElementById('current-streak').textContent = streak;
         document.getElementById('total-completed').textContent = totalCompleted;
@@ -389,12 +405,10 @@ class BrainStreakTracker {
 
     // Setup event listeners
     setupEventListeners() {
-        // Reset button
         document.getElementById('reset-btn').addEventListener('click', () => {
             this.resetProgress();
         });
 
-        // Info button and modal
         const modal = document.getElementById('info-modal');
         const infoBtn = document.getElementById('info-btn');
         const closeBtn = modal.querySelector('.close');
