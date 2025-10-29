@@ -136,6 +136,55 @@ class BrainStreakTracker {
         return distance < brainFactor;
     }
 
+    // Create organic brain outline path with bumpy, wavy edges
+    createBrainOutlinePath() {
+        const cx = this.width / 2;
+        const cy = this.height / 2;
+
+        // Brain dimensions
+        const w = 270; // half width
+        const h = 200; // half height
+
+        // Create path with bezier curves for organic appearance
+        // Starting from top center, going clockwise
+        const path = `
+            M ${cx},${cy - h}
+
+            C ${cx + 15},${cy - h - 5} ${cx + 40},${cy - h + 10} ${cx + 60},${cy - h + 25}
+            C ${cx + 75},${cy - h + 35} ${cx + 95},${cy - h + 50} ${cx + 115},${cy - h + 70}
+
+            C ${cx + 135},${cy - h + 90} ${cx + 160},${cy - h + 115} ${cx + 180},${cy - h + 145}
+            C ${cx + 195},${cy - h + 165} ${cx + 215},${cy - h + 190} ${cx + 235},${cy - h + 215}
+
+            C ${cx + 250},${cy - h + 235} ${cx + 265},${cy - h + 260} ${cx + w},${cy}
+
+            C ${cx + 265},${cy + 30} ${cx + 255},${cy + 60} ${cx + 240},${cy + 85}
+            C ${cx + 225},${cy + 110} ${cx + 205},${cy + 135} ${cx + 180},${cy + 155}
+
+            C ${cx + 155},${cy + 175} ${cx + 125},${cy + 185} ${cx + 95},${cy + 192}
+            C ${cx + 70},${cy + 197} ${cx + 40},${cy + h - 5} ${cx + 15},${cy + h}
+
+            C ${cx + 5},${cy + h + 2} ${cx - 5},${cy + h + 2} ${cx - 15},${cy + h}
+
+            C ${cx - 40},${cy + h - 5} ${cx - 70},${cy + 197} ${cx - 95},${cy + 192}
+            C ${cx - 125},${cy + 185} ${cx - 155},${cy + 175} ${cx - 180},${cy + 155}
+
+            C ${cx - 205},${cy + 135} ${cx - 225},${cy + 110} ${cx - 240},${cy + 85}
+            C ${cx - 255},${cy + 60} ${cx - 265},${cy + 30} ${cx - w},${cy}
+
+            C ${cx - 265},${cy - h + 260} ${cx - 250},${cy - h + 235} ${cx - 235},${cy - h + 215}
+            C ${cx - 215},${cy - h + 190} ${cx - 195},${cy - h + 165} ${cx - 180},${cy - h + 145}
+
+            C ${cx - 160},${cy - h + 115} ${cx - 135},${cy - h + 90} ${cx - 115},${cy - h + 70}
+            C ${cx - 95},${cy - h + 50} ${cx - 75},${cy - h + 35} ${cx - 60},${cy - h + 25}
+
+            C ${cx - 40},${cy - h + 10} ${cx - 15},${cy - h - 5} ${cx},${cy - h}
+            Z
+        `;
+
+        return path;
+    }
+
     // Get color based on position in brain
     getCellColor(x, y, hemisphere) {
         // Create gradient from top to bottom
@@ -172,15 +221,31 @@ class BrainStreakTracker {
     renderBrain() {
         this.svg.innerHTML = '';
 
-        // Add midline separator
+        // Add brain background fill
+        const brainBackground = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const brainPath = this.createBrainOutlinePath();
+        brainBackground.setAttribute('d', brainPath);
+        brainBackground.setAttribute('fill', '#f5f5f5');
+        brainBackground.setAttribute('opacity', '0.3');
+        this.svg.appendChild(brainBackground);
+
+        // Add brain outline with organic, wavy edges
+        const brainOutline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        brainOutline.setAttribute('d', brainPath);
+        brainOutline.setAttribute('fill', 'none');
+        brainOutline.setAttribute('stroke', '#2d3748');
+        brainOutline.setAttribute('stroke-width', '4');
+        brainOutline.setAttribute('stroke-linejoin', 'round');
+        this.svg.appendChild(brainOutline);
+
+        // Add midline separator (central dividing line)
         const midline = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         midline.setAttribute('x1', this.width / 2);
-        midline.setAttribute('y1', 100);
+        midline.setAttribute('y1', 105);
         midline.setAttribute('x2', this.width / 2);
-        midline.setAttribute('y2', 500);
+        midline.setAttribute('y2', 495);
         midline.setAttribute('stroke', '#2d3748');
-        midline.setAttribute('stroke-width', '3');
-        midline.setAttribute('stroke-dasharray', '5,5');
+        midline.setAttribute('stroke-width', '4');
         this.svg.appendChild(midline);
 
         // Render each cell
